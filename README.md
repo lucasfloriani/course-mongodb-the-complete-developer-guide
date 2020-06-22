@@ -1,5 +1,7 @@
 # MongoDB The Complete Developer Guide
 
+NoSQl database that enforces no schemas, but doesn't mean that it doesn't exists.
+
 ## Common Commands
 
 - "cls": Clear the terminal text;
@@ -19,10 +21,31 @@ OBS: Collection and Documents are created implicitly/automatically without needi
 
 ## Data Types
 
-- ObjectId;
-- String;
+These are the principal types in Mongo:
+
+- Text (Only size limited by the document limit that is 16mb);
+- Boolean;
 - Number;
-- Boolean
+  - Integer (int32) \[55\];
+  - NumberLong (int64) \[10000000000\];
+  - NumberDecimal (High precision values) \[12.99\];
+  - Doubles (Low precision values after decimal places) (The value is rounded) (prices are a good use case, only 2 decimals);
+- ObjectId \[ObjectId("sfasd")\];
+- ISODate \[ISODate("2018-09-09")\];
+  - Timestamp (Usually only used internally) \[11421532\];
+- Embedded Document;
+- Array
+
+### Number limitations
+
+- Normal integers (int32) can hold a maximum value of +-2,147,483,647;
+- Long integers (int64) can hold a maximum value of +-9,223,372,036,854,775,807
+
+- NumberInt creates a int32 value => `NumberInt(55)`
+- NumberLong creates a int64 value => `NumberLong(7489729384792)`
+- NumberDecimal creates a high-precision double value => `NumberDecimal("12.99")`
+
+OBS: If you just use a number (e.g. insertOne({a: 1}) in the shell, this will get added as a normal double into the database. The reason for this is that the shell is based on JS which only knows float/ double values and doesn't differ between integers and floats.
 
 ### Embedded Documents
 
@@ -88,3 +111,189 @@ db.passengers.find({}, { name: 1, _id: 0 }).pretty()
 ```
 
 OBS: \_id is always included, need to set like this to don't return it { \_id: 0 }.
+
+## Schemas in MongoDB
+
+You can structure your schema by those 3 ways:
+
+- **Chaos**: No schema
+- **Between Chaos and SQL World**: Some schema
+- **SQL World**: Full schema
+
+Most of the time the strategy used will be or **Between Chaos and SQL World** or **SQLWorld**.
+
+### Schema Validation
+
+- **validationLevel**: The level of validation and restriction of the schema validation;
+- **validationAction**: What it will do when and schema validation problem occours
+
+| validationLevel                                            | validationAction                          |
+|------------------------------------------------------------|-------------------------------------------|
+| Which documents get validated?                             | What happens if validation fails?         |
+| string: All inserts & updates                              | error: Throw error and deny insert/update |
+| moderate: All inserts & update only from correct documents | warn: Log warning but proceed             |
+
+To add and schema validation
+
+```ssh
+db.createCollection("posts", {
+  validator: {
+    $jsonSchema: {
+      bsonType: "object",
+      required: ["title", "text", "creator", "comments"],
+      properties: {
+        title: {
+          bsonType: "string',
+          description: "must be a string and is required",
+        },
+        text: {
+          bsonType: "string',
+          description: "must be a string and is required",
+        },
+        creator: {
+          bsonType: "objectId',
+          description: "must be an objectId and is required",
+        },
+        comments: {
+          bsonType: "array",
+          description: "must be an array and is required",
+          items: {
+            bsonType: "object",
+            required: ["text", "author"],
+            properties: {
+              text: {
+                bsonType: "string",
+                description: "must be a string and is required"
+              },
+              author: {
+                bsonType: "objectId",
+                description: "must be a objectId and is required"
+              },
+            }
+          }
+        }
+      }
+    },
+  }
+})
+```
+
+To add validationActions
+
+```ssh
+db.runCommand({
+  collMod: "posts",
+  validator: {
+    $jsonSchema: {
+      bsonType: "object",
+      required: ["title", "text", "creator", "comments"],
+      properties: {
+        title: {
+          bsonType: "string',
+          description: "must be a string and is required",
+        },
+        text: {
+          bsonType: "string',
+          description: "must be a string and is required",
+        },
+        creator: {
+          bsonType: "objectId',
+          description: "must be an objectId and is required",
+        },
+        comments: {
+          bsonType: "array",
+          description: "must be an array and is required",
+          items: {
+            bsonType: "object",
+            required: ["text", "author"],
+            properties: {
+              text: {
+                bsonType: "string",
+                description: "must be a string and is required"
+              },
+              author: {
+                bsonType: "objectId",
+                description: "must be a objectId and is required"
+              },
+            }
+          }
+        }
+      }
+    },
+  },
+  validationAction: "warn"
+})
+```
+
+## How to modelling your database
+
+Use those questions to guide you:
+
+| Question                                                | Type of Data                                       | How it changes the modelling of your database                                            |
+|---------------------------------------------------------|----------------------------------------------------|------------------------------------------------------------------------------------------|
+| Which Data does my App need or generate?                | User Information, Product Information, Orders, ... | Defines the Fields you'll need (and how they relate)                                     |
+| Where do i need my Data?                                | Welcome Page, Products List Page, Orders Page      | Defines your required collections + field groupings                                      |
+| Which kind of Data or Information do i want to display? | Welcome Page: Product Names; Products Page: ...    | Defines which queries you'll need                                                        |
+| How often do i fetch my data?                           | For every page reload                              | Defines whether you should optimize for easy fetching (duplicating data for easy access) |
+| How often do i write or change my data?                 | Orders => Often, Product Data => Rarely            | Defines whether you should optimize for easy writing                                     |
+
+## Relations
+
+How relations works in MongoDB
+
+### Forms to create relations
+
+| Nested/Embedded Documents                                                                      | References                                                                                      |
+|------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------|
+| Group data togheter logically                                                                  | Split data across collections                                                                   |
+| Greate for data that belongs together and is not really overlapping with other data            | Great for related but shared data as well as for data which is used in relations and standalone |
+| Avoid super-deep nesting (100+ levels) or extremely long arrays (16mb size limit per document) | Allows you to overcome nesting and  size limits (by creating new documents)                     |
+
+### Examples of relations type and forms
+
+| Relation Type | Relation form | Example                                                                           |
+|---------------|---------------|-----------------------------------------------------------------------------------|
+| One to One    | Embedded      | One patient has one disease summary, a disease summary belongs to one patient     |
+| One to One    | References    | One person has one car, a car belongs to one person                               |
+| One to Many   | Embedded      | One thread has many answers, one answer belongs to one question thread.           |
+| One to Many   | References    | One city has many citizens, one citizen belongs to one city                       |
+| Many to Many  | Embedded      | One customer has many products (via orders), a product belongs to many customers. |
+| Many to Many  | References    | One book has many authors, an author belongs to many books.                       |
+
+### Joining collection to search relations
+
+You can search like that using `$lookup` in the `aggregate` method
+
+Collections data
+
+```json
+{
+  "customersCollection": [
+    {
+      "userName": "max",
+      "favBooks": ["id1", "id2"]
+    }
+  ],
+  "booksCollection": [
+    {
+      "_id": "id1",
+      "name": "Lord of the Rings 1",
+    }
+  ]
+}
+```
+
+Aggregate method with lookup
+
+```ssh
+db.customers.aggregate([
+  {
+    $lookup: {
+      from: "books"
+      localField: "favBooks",
+      foreignField: "_id",
+      as: "favBookData"
+    }
+  }
+])
+```
