@@ -297,3 +297,7 @@ db.customers.aggregate([
   }
 ])
 ```
+
+## Working with Shell and Server
+
+
